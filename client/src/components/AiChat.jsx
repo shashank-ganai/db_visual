@@ -91,13 +91,16 @@ export default function AiChat({
     }
   }, [showSettings]);
 
-  // Filter models for selection
-  const filteredModels = useMemo(() => {
-    if (!modelSearch.trim()) return availableModels;
-    const term = modelSearch.toLowerCase();
-    return availableModels.filter(m => 
-      m.name.toLowerCase().includes(term) || m.id.toLowerCase().includes(term)
-    );
+  // Separate Free models on top and all other models below
+  const { freeModels, otherModels } = useMemo(() => {
+    const term = modelSearch.trim().toLowerCase();
+    const list = term 
+      ? availableModels.filter(m => m.name.toLowerCase().includes(term) || m.id.toLowerCase().includes(term))
+      : availableModels;
+
+    const free = list.filter(m => m.isFree);
+    const other = list.filter(m => !m.isFree);
+    return { freeModels: free, otherModels: other };
   }, [availableModels, modelSearch]);
 
   const handleSend = async (textOverride = null) => {
@@ -363,11 +366,25 @@ ${schemaMd}
               onChange={(e) => setModel(e.target.value)}
               disabled={isLoadingModels}
               className="form-input-field"
-              style={{ maxHeight: '180px' }}
+              style={{ maxHeight: '200px' }}
             >
-              {filteredModels.map(m => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
+              {freeModels.length > 0 && (
+                <optgroup label={`🎁 Free Models (${freeModels.length})`}>
+                  {freeModels.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {otherModels.length > 0 && (
+                <optgroup label={`⚡ All Models (${otherModels.length})`}>
+                  {otherModels.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {freeModels.length === 0 && otherModels.length === 0 && (
+                <option value="" disabled>No matching models found</option>
+              )}
             </select>
           </div>
 
