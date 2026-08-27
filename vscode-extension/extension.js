@@ -96,7 +96,7 @@ function activate(context) {
   // Register the Command to open full screen tab
   let disposable = vscode.commands.registerCommand('dbvisualizer.start', function () {
     const config = vscode.workspace.getConfiguration('dbvisualizer');
-    const targetUrl = config.get('url') || 'http://localhost:5174';
+    const targetUrl = config.get('url') || 'https://dbvisual.fabai.cloud';
 
     const panel = vscode.window.createWebviewPanel(
       'dbVisualizer',
@@ -114,7 +114,7 @@ function activate(context) {
   context.subscriptions.push(disposable);
 }
 
-function getWebviewContent(targetUrl = 'http://localhost:5174') {
+function getWebviewContent(targetUrl = 'https://dbvisual.fabai.cloud') {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

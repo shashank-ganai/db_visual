@@ -4,12 +4,20 @@
   "description": "Visualizes your database schema directly inside VS Code",
   "version": "1.0.0",
   "publisher": "SmartOne",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shashank-ganai/db_visual.git"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
   "categories": [
     "Other"
   ],
+  "scripts": {
+    "package": "vsce package --no-git-tag-version --no-dependencies"
+  },
   "activationEvents": [],
   "main": "./extension.js",
   "contributes": {
@@ -43,13 +51,14 @@
       "properties": {
         "dbvisualizer.url": {
           "type": "string",
-          "default": "http://localhost:5174",
-          "description": "URL of the DB Visualizer frontend or local server (e.g. http://localhost:5174 in dev or http://localhost:3001 in production)"
+          "default": "https://dbvisual.fabai.cloud",
+          "description": "URL of the DB Visualizer server"
         }
       }
     }
   },
   "devDependencies": {
-    "@types/vscode": "^1.75.0"
+    "@types/vscode": "^1.75.0",
+    "@vscode/vsce": "^3.9.2"
   }
 }
