@@ -289,6 +289,7 @@ function App() {
               <AiChat 
                 isOpen={isAiChatOpen} 
                 onClose={() => setIsAiChatOpen(false)} 
+                currentDatabase={currentDatabase}
                 schemaData={schema}
                 spsData={sps}
                 selectedSp={selectedSp}

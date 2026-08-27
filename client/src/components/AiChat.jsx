@@ -1,22 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   X, Send, Settings, MessageSquare, Loader2, Database, AlertCircle, 
-  Sparkles, Bot, User, Check, Copy, ArrowRight
+  Sparkles, Bot, User, Check, Copy, ArrowRight, Search, Zap, HelpCircle
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { schemaToMarkdown } from '../utils/schemaToMarkdown';
 
-const MODELS = [
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (Fast)' },
-  { id: 'openai/gpt-4o', name: 'GPT-4o' },
-  { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B' },
-  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash' },
-  { id: 'anthropic/claude-3-haiku:beta', name: 'Claude 3 Haiku' }
+const DEFAULT_MODELS = [
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (Fast & Recommended)', isFree: false },
+  { id: 'openai/gpt-4o', name: 'GPT-4o (High Intelligence)', isFree: false },
+  { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet (Architecture & SQL)', isFree: false },
+  { id: 'deepseek/deepseek-r1:free', name: '[Free] DeepSeek R1 (Reasoning)', isFree: true },
+  { id: 'google/gemini-2.0-flash-exp:free', name: '[Free] Gemini 2.0 Flash', isFree: true },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: '[Free] Llama 3.3 70B', isFree: true },
+  { id: 'mistralai/mistral-small-24b-instruct-2501:free', name: '[Free] Mistral Small 24B', isFree: true },
+  { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', isFree: false },
+  { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B', isFree: false }
 ];
 
 export default function AiChat({ 
   isOpen, 
   onClose, 
+  currentDatabase,
   schemaData, 
   spsData, 
   selectedSp, 
@@ -35,8 +40,9 @@ export default function AiChat({
   const [selectedSpDetails, setSelectedSpDetails] = useState(null);
   const [selectedTableDeps, setSelectedTableDeps] = useState(null);
   
-  const [availableModels, setAvailableModels] = useState(MODELS);
+  const [availableModels, setAvailableModels] = useState(DEFAULT_MODELS);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [modelSearch, setModelSearch] = useState('');
 
   const messagesEndRef = useRef(null);
 
@@ -53,16 +59,17 @@ export default function AiChat({
     if (savedModel) setModel(savedModel);
   }, []);
 
-  // Fetch available models from OpenRouter when settings are opened
+  // Fetch available models from OpenRouter
   useEffect(() => {
     if (showSettings) {
       setIsLoadingModels(true);
       fetch('https://openrouter.ai/api/v1/models')
         .then(res => res.json())
         .then(data => {
-          if (data && data.data) {
+          if (data && Array.isArray(data.data) && data.data.length > 0) {
             const fetchedModels = data.data.map(m => {
-              const isFree = m.pricing?.prompt == 0 && m.pricing?.completion == 0;
+              const isFree = (m.pricing?.prompt === 0 || m.pricing?.prompt === '0') && 
+                             (m.pricing?.completion === 0 || m.pricing?.completion === '0');
               let name = m.name || m.id;
               if (isFree && !name.toLowerCase().includes('free')) {
                 name = `[Free] ${name}`;
@@ -76,10 +83,22 @@ export default function AiChat({
             setAvailableModels(fetchedModels);
           }
         })
-        .catch(err => console.error('Failed to fetch OpenRouter models:', err))
+        .catch(err => {
+          console.warn('OpenRouter dynamic model fetch fallback to defaults:', err);
+          setAvailableModels(DEFAULT_MODELS);
+        })
         .finally(() => setIsLoadingModels(false));
     }
   }, [showSettings]);
+
+  // Filter models for selection
+  const filteredModels = useMemo(() => {
+    if (!modelSearch.trim()) return availableModels;
+    const term = modelSearch.toLowerCase();
+    return availableModels.filter(m => 
+      m.name.toLowerCase().includes(term) || m.id.toLowerCase().includes(term)
+    );
+  }, [availableModels, modelSearch]);
 
   const handleSend = async (textOverride = null) => {
     const textToSend = typeof textOverride === 'string' ? textOverride : input;
@@ -98,42 +117,81 @@ export default function AiChat({
     setIsLoading(true);
 
     try {
-      // Build the system prompt with schema context
-      const schemaMd = schemaToMarkdown(schemaData);
+      // Build comprehensive database & schema context
+      const tableCount = schemaData?.tables?.length || 0;
+      const spCount = spsData?.length || 0;
+      const dbName = currentDatabase || 'master';
+
+      // 1. Full schema markdown
+      const schemaMd = schemaToMarkdown(schemaData, 100);
       
+      // 2. High-level Architecture Summary
+      let dbOverview = `### Active Database Environment\n`;
+      dbOverview += `- **Current Database:** \`${dbName}\`\n`;
+      dbOverview += `- **Total Tables:** ${tableCount}\n`;
+      dbOverview += `- **Total Stored Procedures:** ${spCount}\n\n`;
+
+      if (schemaData?.tables && schemaData.tables.length > 0) {
+        const tableList = schemaData.tables.map(t => `${t.schema}.${t.name} (${t.columns.length} cols)`).join(', ');
+        dbOverview += `**Table Directory:** ${tableList}\n\n`;
+
+        // Relationship graph summary
+        const relations = [];
+        schemaData.tables.forEach(t => {
+          if (t.foreignKeys && t.foreignKeys.length > 0) {
+            t.foreignKeys.forEach(fk => {
+              relations.push(`${t.schema}.${t.name}.${fk.column} ➔ ${fk.referencedSchema}.${fk.referencedTable}.${fk.referencedColumn}`);
+            });
+          }
+        });
+        if (relations.length > 0) {
+          dbOverview += `**Foreign Key Relationships (${relations.length}):**\n${relations.slice(0, 40).map(r => `- ${r}`).join('\n')}\n\n`;
+        }
+      }
+
+      // 3. Stored Procedures List
       let spContext = '';
       if (spsData && spsData.length > 0) {
-        const spNames = spsData.map(sp => sp.sp_name).join(', ');
-        spContext += `\n\nThe database also contains the following Stored Procedures: ${spNames}.`;
+        const spNames = spsData.map(sp => `${sp.schema_name}.${sp.sp_name}`).join(', ');
+        spContext += `\n**Stored Procedures in Database (${spsData.length}):**\n${spNames}\n`;
       }
+
+      // 4. Focus context (if specific table or SP is currently active)
+      let focusContext = '';
       if (selectedSp && selectedSpDetails) {
-        spContext += `\n\n**USER IS CURRENTLY VIEWING THIS STORED PROCEDURE:**\n`;
-        spContext += `Name: ${selectedSp.schema_name}.${selectedSp.sp_name}\n`;
-        spContext += `Dependencies:\n`;
-        spContext += `- Depends on: ${selectedSpDetails.dependsOn?.map(d => `${d.schema_name}.${d.entity_name} (${d.type})`).join(', ') || 'None'}\n`;
-        spContext += `- Referenced by: ${selectedSpDetails.referencedBy?.map(d => `${d.schema_name}.${d.entity_name} (${d.type})`).join(', ') || 'None'}\n`;
-        spContext += `Definition:\n\`\`\`sql\n${selectedSpDetails.definition}\n\`\`\`\n`;
-        spContext += `Parameters:\n${selectedSpDetails.parameters?.map(p => `- ${p.ParameterName} (${p.DataType})`).join('\n') || 'None'}\n`;
+        focusContext += `\n\n--- CURRENT FOCUS: USER IS INSPECTING STORED PROCEDURE ---\n`;
+        focusContext += `Name: ${selectedSp.schema_name}.${selectedSp.sp_name}\n`;
+        focusContext += `Dependencies:\n`;
+        focusContext += `- Depends on: ${selectedSpDetails.dependsOn?.map(d => `${d.schema_name}.${d.entity_name} (${d.type})`).join(', ') || 'None'}\n`;
+        focusContext += `- Referenced by: ${selectedSpDetails.referencedBy?.map(d => `${d.schema_name}.${d.entity_name} (${d.type})`).join(', ') || 'None'}\n`;
+        focusContext += `Definition:\n\`\`\`sql\n${selectedSpDetails.definition}\n\`\`\`\n`;
+        focusContext += `Parameters:\n${selectedSpDetails.parameters?.map(p => `- ${p.ParameterName} (${p.DataType})`).join('\n') || 'None'}\n`;
       }
 
       if (selectedTable && selectedTableDeps) {
-        spContext += `\n\n**USER IS CURRENTLY VIEWING THIS TABLE:**\n`;
-        spContext += `Name: ${selectedTable}\n`;
-        spContext += `It is referenced by the following objects (Dependencies):\n`;
-        spContext += `${selectedTableDeps.map(d => `- ${d.schema_name}.${d.entity_name} (${d.type})`).join('\n') || 'None'}\n`;
+        focusContext += `\n\n--- CURRENT FOCUS: USER IS INSPECTING TABLE ---\n`;
+        focusContext += `Table: ${selectedTable}\n`;
+        focusContext += `Dependencies & References:\n`;
+        focusContext += `${selectedTableDeps.map(d => `- ${d.schema_name}.${d.entity_name} (${d.type})`).join('\n') || 'None'}\n`;
       }
 
       const systemPrompt = `You are an expert Microsoft SQL Server Database Architect and AI Assistant inside DB Visualizer.
-Your job is to answer questions about the database schema, write optimized and safe SQL queries, explain relationships, suggest performance improvements, or identify missing indexes.
 
-Here is the markdown representation of the current active database schema:
-${schemaMd}
+## YOUR CAPABILITIES & CONTEXT
+You have full awareness of the connected SQL Server database. Even when the user has NOT clicked on a specific table, you have the entire database catalog, tables, columns, primary keys, foreign key relationships, and stored procedures provided below.
+
+${dbOverview}
 ${spContext}
+${focusContext}
 
-Guidelines:
-1. When generating SQL, ALWAYS output ONLY standard Microsoft SQL Server (T-SQL) syntax.
-2. Only suggest read-only queries (SELECT) or safe CREATE INDEX statements. Never generate DROP, DELETE, or destructive queries without strong warnings.
-3. Keep answers concise, clear, and formatted nicely in Markdown with syntax-highlighted SQL blocks.`;
+### Full Schema Definition:
+${schemaMd}
+
+## GUIDELINES
+1. **Always use standard T-SQL (Microsoft SQL Server) syntax** for any SQL code blocks.
+2. **Contextual Awareness**: Proactively reference existing tables and columns in the schema. When the user asks general questions without specifying a table (e.g. "how are customers linked to orders?", "give me an architecture overview", "suggest an index"), examine all tables in the schema and provide exact queries using the real table/column names.
+3. **Safety First**: This is a read-only visualizer tool. Only suggest SELECT queries or non-destructive analysis scripts.
+4. **Clarity**: Format responses cleanly in Markdown with bold headers, bullet points, and syntax-highlighted SQL blocks.`;
 
       const apiMessages = [
         { role: 'system', content: systemPrompt },
@@ -244,7 +302,9 @@ Guidelines:
           </div>
           <div>
             <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>AI Schema Assistant</div>
-            <div style={{ fontSize: '0.675rem', color: 'var(--text-tertiary)' }}>{model.split('/')[1] || model}</div>
+            <div style={{ fontSize: '0.675rem', color: 'var(--text-tertiary)' }}>
+              {currentDatabase ? `DB: ${currentDatabase}` : 'Full Schema Context'} • {model.split('/')[1] || model}
+            </div>
           </div>
         </div>
         
@@ -262,7 +322,7 @@ Guidelines:
         <div className="ai-chat-settings custom-scrollbar">
           <div className="settings-header" style={{ marginBottom: '1rem' }}>
             <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-primary)' }}>AI Configuration</h4>
-            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Configure your OpenRouter API credentials</p>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Enter your OpenRouter API key to chat with AI</p>
           </div>
           
           <div className="form-field-group" style={{ marginBottom: '1rem' }}>
@@ -275,21 +335,37 @@ Guidelines:
               className="form-input-field"
             />
             <span className="form-field-hint">
-              Stored locally in your browser only.
+              Stored locally in your browser only. Free & paid models supported.
             </span>
           </div>
 
           <div className="form-field-group" style={{ marginBottom: '1rem' }}>
-            <label className="form-field-label">
-              Model {isLoadingModels && <Loader2 size={12} className="animate-spin" style={{ display: 'inline', marginLeft: '6px' }} />}
+            <label className="form-field-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Model Selection ({availableModels.length} models)</span>
+              {isLoadingModels && <Loader2 size={12} className="animate-spin" />}
             </label>
+
+            {availableModels.length > 10 && (
+              <div style={{ position: 'relative', marginBottom: '6px' }}>
+                <input 
+                  type="text" 
+                  value={modelSearch} 
+                  onChange={(e) => setModelSearch(e.target.value)} 
+                  placeholder="Filter models (e.g. gpt, free, claude, deepseek)..."
+                  className="form-input-field"
+                  style={{ fontSize: '0.75rem', padding: '6px 8px' }}
+                />
+              </div>
+            )}
+
             <select 
               value={model} 
               onChange={(e) => setModel(e.target.value)}
               disabled={isLoadingModels}
               className="form-input-field"
+              style={{ maxHeight: '180px' }}
             >
-              {availableModels.map(m => (
+              {filteredModels.map(m => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
@@ -307,23 +383,31 @@ Guidelines:
                 <div className="empty-chat-icon">
                   <Sparkles size={24} />
                 </div>
-                <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.9rem', color: 'var(--text-primary)' }}>Ask AI about your database</h4>
-                <p style={{ fontSize: '0.775rem', color: 'var(--text-secondary)', margin: 0 }}>
-                  Generate complex JOIN queries, diagnose relationships, or get index recommendations.
+                <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                  Ask AI about {currentDatabase ? `"${currentDatabase}"` : 'your database'}
+                </h4>
+                <p style={{ fontSize: '0.775rem', color: 'var(--text-secondary)', margin: '0 0 1rem 0' }}>
+                  {schemaData?.tables?.length 
+                    ? `AI has full context of all ${schemaData.tables.length} tables and ${spsData?.length || 0} stored procedures.`
+                    : 'Connect to a database to analyze tables, relationships, and queries.'}
                 </p>
                 
                 <div className="suggestions-list">
-                  <button className="suggestion-pill" onClick={() => handleSend('Explain this schema architecture and its primary business domains')}>
+                  <button className="suggestion-pill" onClick={() => handleSend('Provide a comprehensive architectural overview of this database schema and key domain entities.')}>
                     <Sparkles size={11} className="pill-icon" />
-                    <span>Explain schema architecture</span>
+                    <span>Explain full schema architecture</span>
                   </button>
-                  <button className="suggestion-pill" onClick={() => handleSend('Identify potential missing foreign keys or orphan tables')}>
+                  <button className="suggestion-pill" onClick={() => handleSend('Analyze all foreign keys and summarize how tables link together.')}>
                     <Sparkles size={11} className="pill-icon" />
-                    <span>Find missing relations / orphans</span>
+                    <span>Map table relationships & FKs</span>
                   </button>
-                  <button className="suggestion-pill" onClick={() => handleSend('Suggest performance indexes for tables with high row counts')}>
-                    <Sparkles size={11} className="pill-icon" />
-                    <span>Suggest performance indexes</span>
+                  <button className="suggestion-pill" onClick={() => handleSend('List all stored procedures in this database and summarize their roles.')}>
+                    <Zap size={11} className="pill-icon" />
+                    <span>Stored procedures summary</span>
+                  </button>
+                  <button className="suggestion-pill" onClick={() => handleSend('Identify potential missing foreign keys, orphan tables, or missing indexes.')}>
+                    <HelpCircle size={11} className="pill-icon" />
+                    <span>Find missing relations & index suggestions</span>
                   </button>
                 </div>
               </div>
@@ -369,7 +453,7 @@ Guidelines:
 
           <div className="ai-chat-input-box">
             <textarea
-              placeholder="Ask about your schema... (Shift+Enter for newline)"
+              placeholder="Ask anything about this database schema... (Shift+Enter for newline)"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {

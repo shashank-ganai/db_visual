@@ -11,7 +11,14 @@ const originalFetch = window.fetch;
 window.fetch = async (input, init = {}) => {
   const url = typeof input === 'string' ? input : (input?.url || '');
   
-  if (url.includes('/api/')) {
+  // Only intercept local application API requests (do NOT intercept external APIs like openrouter.ai)
+  const isLocalApi = typeof url === 'string' && (
+    url.startsWith('/api/') || 
+    url.startsWith(window.location.origin + '/api/') ||
+    (!url.startsWith('http://') && !url.startsWith('https://') && url.includes('/api/'))
+  );
+
+  if (isLocalApi) {
     init = init || {};
     init.credentials = init.credentials || 'include';
     
