@@ -1,0 +1,55 @@
+{
+  "name": "db-visualizer",
+  "displayName": "DB Visualizer",
+  "description": "Visualizes your database schema directly inside VS Code",
+  "version": "1.0.0",
+  "publisher": "SmartOne",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "dbvisualizer.start",
+        "title": "DB Visualizer: Open Full Screen",
+        "icon": "$(database)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dbvisualizer-sidebar",
+          "title": "DB Visualizer",
+          "icon": "$(database)"
+        }
+      ]
+    },
+    "views": {
+      "dbvisualizer-sidebar": [
+        {
+          "id": "dbvisualizer.sidebarView",
+          "name": "Controls",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DB Visualizer",
+      "properties": {
+        "dbvisualizer.url": {
+          "type": "string",
+          "default": "http://localhost:5174",
+          "description": "URL of the DB Visualizer frontend or local server (e.g. http://localhost:5174 in dev or http://localhost:3001 in production)"
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0"
+  }
+}
