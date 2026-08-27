@@ -4,19 +4,11 @@ Interactive Database Schema & Stored Procedure Visualizer with AI-assisted schem
 
 ---
 
-## 🔐 Static Login Credentials
+## 🔐 Security & Access Control
 
-No external database or OAuth configuration is required. You can sign in using any of the 5 pre-configured static accounts:
+Access to the visualizer is protected via static role-based developer accounts. No external database or OAuth provider setup is required.
 
-| Persona | Username | Password | Role |
-|---|---|---|---|
-| **System Admin** | `sys_ops9x` | `K9#vP$8xL2!zQ1` | Full administrative controls |
-| **Lead Architect** | `arch_lead4` | `W4*mE#9tR7@yU3` | Schema, SPs & architectural analysis |
-| **Data Engineer** | `data_core7` | `J7$nB&2hF5!pX8` | Relationship & path discovery |
-| **QA Auditor** | `qa_audit2` | `T3#kM%6wS9*vC4` | Diff compare & schema audits |
-| **Security Inspector** | `inspect_x8` | `R8@zY^5qD1!mN7` | Read-only schema inspection |
-
-*(Tip: The login UI features 1-click quick-fill selector chips for instant access).*
+Configure and manage authorized static credentials securely in your server `.env` or backend configuration (`server/index.js`).
 
 ---
 
