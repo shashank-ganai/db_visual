@@ -17,7 +17,8 @@ const aiLimiter = rateLimit({
 
 const app = express();
 app.use(helmet({
-  contentSecurityPolicy: false // Disable CSP for simplicity in this visualizer
+  contentSecurityPolicy: false, // Disable CSP for simplicity in this visualizer
+  frameguard: false            // Allow embedding inside VS Code Webviews
 }));
 app.use(cors());
 app.use(express.json());
