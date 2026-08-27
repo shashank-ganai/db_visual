@@ -16,11 +16,16 @@ const aiLimiter = rateLimit({
 });
 
 const app = express();
+app.set('trust proxy', true); // Trust IIS ARR / reverse proxy headers
+
 app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP for simplicity in this visualizer
   frameguard: false            // Allow embedding inside VS Code Webviews
 }));
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -37,6 +42,19 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_key';
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   console.error('FATAL: JWT_SECRET environment variable is required in production mode.');
   process.exit(1);
+}
+
+// Helpers for robust auth & connection token extraction (supports both Cookies & Headers)
+function getToken(req) {
+  return req.cookies?.auth_token || 
+         req.headers?.authorization?.replace(/^Bearer\s+/i, '') || 
+         req.headers?.['x-auth-token'];
+}
+
+function getCid(req) {
+  return req.cookies?.db_connection_id || 
+         req.headers?.['x-db-connection-id'] || 
+         req.query?.cid;
 }
 
 // --- Auth Routes ---
@@ -56,8 +74,12 @@ app.post('/api/login', (req, res) => {
       name: matchedUser.name
     };
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('auth_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
-    res.json({ success: true, user: userPayload });
+    res.cookie('auth_token', token, { 
+      httpOnly: true, 
+      sameSite: 'lax',
+      path: '/'
+    });
+    res.json({ success: true, token, user: userPayload });
   } else {
     res.status(401).json({ error: 'Invalid username or password' });
   }
@@ -65,11 +87,12 @@ app.post('/api/login', (req, res) => {
 
 app.post('/api/logout', (req, res) => {
   res.clearCookie('auth_token');
+  res.clearCookie('db_connection_id');
   res.json({ success: true });
 });
 
 app.get('/api/auth-status', (req, res) => {
-  const token = req.cookies.auth_token;
+  const token = getToken(req);
   if (!token) return res.json({ authenticated: false });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -88,13 +111,14 @@ app.get('/api/auth-status', (req, res) => {
 
 // --- Auth Middleware ---
 function requireAuth(req, res, next) {
-  const token = req.cookies.auth_token;
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  const token = getToken(req);
+  if (!token) return res.status(401).json({ error: 'Unauthorized: Please sign in' });
   try {
-    jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
     next();
   } catch (err) {
-    res.status(401).json({ error: 'Invalid token' });
+    res.status(401).json({ error: 'Unauthorized: Session expired, please sign in again' });
   }
 }
 
@@ -103,11 +127,12 @@ app.use('/api', requireAuth);
 
 // Check connection status
 app.get('/api/status', async (req, res) => {
-  const cid = req.cookies.db_connection_id;
+  const cid = getCid(req);
   const config = cid ? db.getConfig(cid) : null;
   const currentDb = cid ? await db.getCurrentDatabase(cid) : null;
   res.json({ 
     connected: !!config,
+    cid,
     currentDatabase: currentDb || (config ? (config.database || 'master') : null)
   });
 });
@@ -117,7 +142,7 @@ app.post('/api/connect', async (req, res) => {
   try {
     const config = req.body;
     // Extract existing ID if they are re-connecting/re-verifying in the same browser session
-    const existingCid = req.cookies.db_connection_id;
+    const existingCid = getCid(req);
     const cid = await db.connect(config, existingCid);
     
     // Use the new/existing cid to fetch databases
@@ -138,10 +163,15 @@ app.post('/api/connect', async (req, res) => {
     }
     
     // Set cookie that lives for the session
-    res.cookie('db_connection_id', cid, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+    res.cookie('db_connection_id', cid, { 
+      httpOnly: true, 
+      sameSite: 'lax',
+      path: '/'
+    });
     
     res.json({ 
       success: true, 
+      cid,
       databases, 
       currentDatabase: currentDb || config.database || (databases[0] || 'master') 
     });
@@ -153,7 +183,7 @@ app.post('/api/connect', async (req, res) => {
 // Disconnect
 app.post('/api/disconnect', async (req, res) => {
   try {
-    const cid = req.cookies.db_connection_id;
+    const cid = getCid(req);
     if (cid) await db.disconnect(cid);
     res.clearCookie('db_connection_id');
     res.json({ success: true });
@@ -165,7 +195,7 @@ app.post('/api/disconnect', async (req, res) => {
 // Get Databases
 app.get('/api/databases', async (req, res) => {
   try {
-    const databases = await db.listDatabases(req.cookies.db_connection_id);
+    const databases = await db.listDatabases(getCid(req));
     res.json({ databases });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -177,7 +207,7 @@ app.post('/api/switch-database', async (req, res) => {
   try {
     const { database } = req.body;
     if (!database) throw new Error('Database name required');
-    const cid = req.cookies.db_connection_id;
+    const cid = getCid(req);
     if (!cid) throw new Error('No active connection session');
 
     await db.switchDatabase(cid, database);
@@ -193,7 +223,7 @@ app.post('/api/switch-database', async (req, res) => {
 // Get Schema
 app.get('/api/schema', async (req, res) => {
   try {
-    const schema = await db.getSchema(req.cookies.db_connection_id);
+    const schema = await db.getSchema(getCid(req));
     res.json(schema);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -204,7 +234,7 @@ app.get('/api/schema', async (req, res) => {
 app.get('/api/database/:dbName/full-schema', async (req, res) => {
   try {
     const { dbName } = req.params;
-    const fullSchema = await db.getFullSchemaForDatabase(req.cookies.db_connection_id, dbName);
+    const fullSchema = await db.getFullSchemaForDatabase(getCid(req), dbName);
     res.json(fullSchema);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -218,7 +248,7 @@ app.get('/api/table/:schema/:name/data', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const size = parseInt(req.query.size) || 50;
     
-    const data = await db.getTableData(req.cookies.db_connection_id, schema, name, page, size);
+    const data = await db.getTableData(getCid(req), schema, name, page, size);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -229,7 +259,7 @@ app.get('/api/table/:schema/:name/data', async (req, res) => {
 app.get('/api/table/:schema/:name/count', async (req, res) => {
   try {
     const { schema, name } = req.params;
-    const count = await db.getTableCount(req.cookies.db_connection_id, schema, name);
+    const count = await db.getTableCount(getCid(req), schema, name);
     res.json({ count });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -240,7 +270,7 @@ app.get('/api/table/:schema/:name/count', async (req, res) => {
 app.get('/api/tables/:schema/:name/dependencies', async (req, res) => {
   try {
     const { schema, name } = req.params;
-    const deps = await db.getTableDependencies(req.cookies.db_connection_id, schema, name);
+    const deps = await db.getTableDependencies(getCid(req), schema, name);
     res.json(deps);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -250,7 +280,7 @@ app.get('/api/tables/:schema/:name/dependencies', async (req, res) => {
 // Get Stored Procedures
 app.get('/api/sps', async (req, res) => {
   try {
-    const sps = await db.getStoredProcedures(req.cookies.db_connection_id);
+    const sps = await db.getStoredProcedures(getCid(req));
     res.json(sps);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -261,7 +291,7 @@ app.get('/api/sps', async (req, res) => {
 app.get('/api/sps/:schema/:name/analyze', async (req, res) => {
   try {
     const { schema, name } = req.params;
-    const analysis = await db.analyzeStoredProcedure(req.cookies.db_connection_id, schema, name);
+    const analysis = await db.analyzeStoredProcedure(getCid(req), schema, name);
     res.json(analysis);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -272,7 +302,7 @@ app.get('/api/sps/:schema/:name/analyze', async (req, res) => {
 app.get('/api/sps/:schema/:name/definition', async (req, res) => {
   try {
     const { schema, name } = req.params;
-    const definition = await db.getSpDefinition(req.cookies.db_connection_id, schema, name);
+    const definition = await db.getSpDefinition(getCid(req), schema, name);
     res.json({ definition });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -283,7 +313,7 @@ app.get('/api/sps/:schema/:name/definition', async (req, res) => {
 app.get('/api/database/:dbName/sps/:schema/:name/definition', async (req, res) => {
   try {
     const { dbName, schema, name } = req.params;
-    const definition = await db.getSpDefinitionForDatabase(req.cookies.db_connection_id, dbName, schema, name);
+    const definition = await db.getSpDefinitionForDatabase(getCid(req), dbName, schema, name);
     res.json({ definition });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -313,7 +343,7 @@ app.post('/api/compare/full-schema', async (req, res) => {
 
     if (sameServer || !targetConfig) {
       if (!dbName) throw new Error('Database name required for comparison');
-      const cid = req.cookies.db_connection_id;
+      const cid = getCid(req);
       if (!cid) throw new Error('No active connection session');
       const fullSchema = await db.getFullSchemaForDatabase(cid, dbName);
       return res.json({ ...fullSchema, currentDatabase: dbName });
@@ -334,7 +364,7 @@ app.post('/api/compare/sp-definition', async (req, res) => {
     if (!schema || !name) throw new Error('Schema and SP name required');
 
     if (sameServer || !targetConfig) {
-      const cid = req.cookies.db_connection_id;
+      const cid = getCid(req);
       if (!cid) throw new Error('No active connection session');
       const definition = dbName 
         ? await db.getSpDefinitionForDatabase(cid, dbName, schema, name)
