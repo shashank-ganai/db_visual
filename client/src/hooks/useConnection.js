@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 
+const STORAGE_KEY = 'db_visual_saved_conn';
+
 export function useConnection() {
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -7,7 +9,8 @@ export function useConnection() {
   const [databases, setDatabases] = useState([]);
   const [currentDatabase, setCurrentDatabase] = useState('');
 
-  // Check initial status on mount
+  // Check initial status on mount — if server already has a pool, use it.
+  // Otherwise, attempt to auto-reconnect from saved credentials.
   useEffect(() => {
     fetch('/api/status')
       .then(res => res.json())
@@ -17,12 +20,13 @@ export function useConnection() {
           if (data.currentDatabase) {
             setCurrentDatabase(data.currentDatabase);
           }
-          // fetch databases
           return fetch('/api/databases');
         } else {
+          // Server doesn't have an active pool — try auto-reconnect
           setIsConnected(false);
           setDatabases([]);
           setCurrentDatabase('');
+          autoReconnect();
           return null;
         }
       })
@@ -36,6 +40,36 @@ export function useConnection() {
         console.error('Failed to check status:', err);
         setIsConnected(false);
       });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-reconnect using saved credentials
+  const autoReconnect = useCallback(async () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved || !saved.server || !saved.user || !saved.password) return;
+
+      setLoading(true);
+      setError(null);
+
+      const res = await fetch('/api/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saved)
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setIsConnected(true);
+        setDatabases(data.databases || []);
+        setCurrentDatabase(data.currentDatabase || '');
+      }
+    } catch (err) {
+      console.warn('Auto-reconnect failed:', err.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const connect = useCallback(async (config) => {
@@ -54,6 +88,19 @@ export function useConnection() {
       setIsConnected(true);
       setDatabases(data.databases || []);
       setCurrentDatabase(data.currentDatabase || '');
+
+      // Persist full connection config for auto-reconnect
+      // (only for manual config, not connection strings)
+      if (config.server) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          server: config.server,
+          port: config.port || '1433',
+          database: config.database || '',
+          user: config.user,
+          password: config.password
+        }));
+      }
+
       return true;
     } catch (err) {
       setError(err.message);
@@ -77,6 +124,17 @@ export function useConnection() {
     }
   }, []);
 
+  const forgetConnection = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
+  }, []);
+
+  const hasSavedConnection = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }, []);
+
   const switchDatabase = useCallback(async (dbName) => {
     setLoading(true);
     setError(null);
@@ -89,6 +147,17 @@ export function useConnection() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Switch failed');
       setCurrentDatabase(data.currentDatabase || dbName);
+
+      // Update saved connection database
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const saved = JSON.parse(raw);
+          saved.database = data.currentDatabase || dbName;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        }
+      } catch {}
+
       return data.schema; // return new schema directly
     } catch (err) {
       setError(err.message);
@@ -106,6 +175,8 @@ export function useConnection() {
     currentDatabase,
     connect,
     disconnect,
-    switchDatabase
+    switchDatabase,
+    forgetConnection,
+    hasSavedConnection
   };
 }

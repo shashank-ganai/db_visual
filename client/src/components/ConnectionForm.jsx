@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Loader2, Server, Plug, AlertCircle, LogOut, ArrowRight, Sparkles } from 'lucide-react';
+import { Database, Loader2, Server, Plug, AlertCircle, LogOut, ArrowRight, Sparkles, Trash2, Zap } from 'lucide-react';
 
-export default function ConnectionForm({ onConnect, loading, error, onLogout }) {
+export default function ConnectionForm({ onConnect, loading, error, onLogout, savedConnection, onForgetConnection }) {
   const [tab, setTab] = useState('manual');
   const [connString, setConnString] = useState('');
   
@@ -12,26 +12,43 @@ export default function ConnectionForm({ onConnect, loading, error, onLogout }) 
   const [password, setPassword] = useState('');
 
   useEffect(() => {
-    const saved = localStorage.getItem('db_visual_last_conn');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.server) setServer(parsed.server);
-        if (parsed.port) setPort(parsed.port);
-        if (parsed.database) setDatabase(parsed.database);
-        if (parsed.user) setUser(parsed.user);
-      } catch(e) {}
+    if (savedConnection) {
+      if (savedConnection.server) setServer(savedConnection.server);
+      if (savedConnection.port) setPort(savedConnection.port);
+      if (savedConnection.database) setDatabase(savedConnection.database);
+      if (savedConnection.user) setUser(savedConnection.user);
+      if (savedConnection.password) setPassword(savedConnection.password);
+    } else {
+      const saved = localStorage.getItem('db_visual_last_conn');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.server) setServer(parsed.server);
+          if (parsed.port) setPort(parsed.port);
+          if (parsed.database) setDatabase(parsed.database);
+          if (parsed.user) setUser(parsed.user);
+        } catch(e) {}
+      }
     }
-  }, []);
+  }, [savedConnection]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (tab === 'string') {
       onConnect({ connectionString: connString });
     } else {
-      localStorage.setItem('db_visual_last_conn', JSON.stringify({ server, port, database, user }));
       onConnect({ server, port, database, user, password });
     }
+  };
+
+  const handleForget = () => {
+    if (onForgetConnection) onForgetConnection();
+    setServer('');
+    setPort('1433');
+    setDatabase('');
+    setUser('');
+    setPassword('');
+    localStorage.removeItem('db_visual_last_conn');
   };
 
   return (
@@ -45,6 +62,25 @@ export default function ConnectionForm({ onConnect, loading, error, onLogout }) 
           <h1 className="connection-title">Connect Database</h1>
           <p className="connection-subtitle">Connect to your Microsoft SQL Server instance</p>
         </div>
+
+        {/* Saved connection indicator */}
+        {savedConnection && savedConnection.server && (
+          <div className="saved-conn-banner">
+            <div className="saved-conn-info">
+              <Zap size={14} className="saved-conn-icon" />
+              <span>Saved: <strong>{savedConnection.server}</strong>{savedConnection.database ? ` / ${savedConnection.database}` : ''}</span>
+            </div>
+            <button 
+              type="button" 
+              className="saved-conn-forget" 
+              onClick={handleForget}
+              title="Forget saved connection"
+            >
+              <Trash2 size={12} />
+              <span>Forget</span>
+            </button>
+          </div>
+        )}
         
         {/* Segmented Mode Tabs */}
         <div className="connection-tabs-bar">
@@ -91,10 +127,7 @@ export default function ConnectionForm({ onConnect, loading, error, onLogout }) 
             <>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
                 <div className="form-field-group">
-                  <label className="form-field-label">
-                    Server / Host
-                    {server && <span className="field-subtle-hint">(Last: {server})</span>}
-                  </label>
+                  <label className="form-field-label">Server / Host</label>
                   <input 
                     type="text" 
                     value={server} 

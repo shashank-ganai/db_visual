@@ -31,7 +31,9 @@ function App() {
     disconnect,
     databases,
     currentDatabase,
-    switchDatabase
+    switchDatabase,
+    forgetConnection,
+    hasSavedConnection
   } = useConnection();
   
   const { 
@@ -62,7 +64,8 @@ function App() {
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [aiChatInitialMessage, setAiChatInitialMessage] = useState('');
   const [theme, setTheme] = useState('dark');
-  const [layoutDirection, setLayoutDirection] = useState('RIGHT');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const layoutDirection = 'RIGHT';
   const [isAuthenticated, setIsAuthenticated] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
 
@@ -202,7 +205,7 @@ function App() {
   };
 
   if (!isConnected) {
-    return <ConnectionForm onConnect={connect} loading={connLoading} error={connError} onLogout={handleLogout} />;
+    return <ConnectionForm onConnect={connect} loading={connLoading} error={connError} onLogout={handleLogout} savedConnection={hasSavedConnection()} onForgetConnection={forgetConnection} />;
   }
 
   const isLoading = schemaLoading || loadingLayout;
@@ -221,12 +224,12 @@ function App() {
             onLogout={handleLogout}
             theme={theme}
             onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-            layoutDirection={layoutDirection}
-            onToggleLayout={() => setLayoutDirection(d => d === 'RIGHT' ? 'DOWN' : 'RIGHT')}
             onToggleAiChat={() => setIsAiChatOpen(!isAiChatOpen)}
             onToggleCompare={() => setIsCompareOpen(!isCompareOpen)}
             onTogglePathFinder={() => setIsPathFinderOpen(!isPathFinderOpen)}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+            sidebarCollapsed={sidebarCollapsed}
+            onToggleSidebar={() => setSidebarCollapsed(c => !c)}
           />
           
           <div className="main-content">
@@ -241,6 +244,8 @@ function App() {
               selectedSp={selectedSp}
               onSelectSp={(sp) => { setSelectedSp(sp); setSelectedTable(null); }}
               onLogout={handleLogout}
+              collapsed={sidebarCollapsed}
+              onToggleCollapse={() => setSidebarCollapsed(c => !c)}
             />
             
             {isLoading ? (

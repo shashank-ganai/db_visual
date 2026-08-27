@@ -1,8 +1,8 @@
 import React from 'react';
 import { 
-  Database, Server, RefreshCw, LogOut, Sun, Moon, Maximize, 
-  LayoutTemplate, Image as ImageIcon, Bot, ArrowRightLeft, Unplug,
-  Compass, Search, ChevronDown, CheckCircle2, User, Shield
+  Database, Server, RefreshCw, LogOut, Sun, Moon, 
+  Image as ImageIcon, Bot, ArrowRightLeft, Unplug,
+  Compass, Search, ChevronDown, User, PanelLeftClose, PanelLeft
 } from 'lucide-react';
 import { useReactFlow, getNodesBounds, getViewportForBounds } from '@xyflow/react';
 import { toPng } from 'html-to-image';
@@ -18,12 +18,12 @@ export default function Toolbar({
   onLogout,
   theme,
   onToggleTheme,
-  layoutDirection,
-  onToggleLayout,
   onToggleAiChat,
   onToggleCompare,
   onTogglePathFinder,
-  onOpenCommandPalette
+  onOpenCommandPalette,
+  sidebarCollapsed,
+  onToggleSidebar
 }) {
   const { getNodes, fitView } = useReactFlow();
   const showToast = useToast();
@@ -63,41 +63,28 @@ export default function Toolbar({
 
   return (
     <header className="toolbar glass">
-      {/* Left Section: Branding & Search */}
+      {/* Left Section: Branding + Sidebar Toggle + DB Selector */}
       <div className="toolbar-left">
+        <button 
+          className="btn-icon-subtle sidebar-toggle-btn" 
+          onClick={onToggleSidebar}
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {sidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+        </button>
+
         <div className="app-title">
           <div className="app-logo-icon">
-            <Database size={18} />
+            <Database size={16} />
           </div>
           <span className="app-title-text">DB Visualizer</span>
           <span className="app-badge">MSSQL</span>
         </div>
         
         <div className="toolbar-divider" />
-        
-        <div className="connection-pill" title="Connected to SQL Server instance">
-          <span className="status-dot active"></span>
-          <span className="connection-status-text">Connected</span>
-        </div>
 
-        <div className="toolbar-divider" />
-        
-        {/* Quick Search / Command Palette Launcher */}
-        <button 
-          className="toolbar-search-trigger" 
-          onClick={onOpenCommandPalette}
-          title="Search tables, procedures, keys (Ctrl+K / Cmd+K)"
-        >
-          <Search size={14} className="search-icon" />
-          <span>Quick search...</span>
-          <kbd>Ctrl+K</kbd>
-        </button>
-      </div>
-      
-      {/* Center Section: Database Switcher & Canvas Controls */}
-      <div className="toolbar-center">
         <div className="db-selector-capsule">
-          <Server size={14} className="capsule-icon" />
+          <Server size={13} className="capsule-icon" />
           <select 
             value={currentDatabase} 
             onChange={(e) => onSwitchDatabase(e.target.value)}
@@ -111,33 +98,28 @@ export default function Toolbar({
               <option value={currentDatabase}>{currentDatabase}</option>
             )}
           </select>
-          <ChevronDown size={12} className="select-chevron" />
+          <ChevronDown size={11} className="select-chevron" />
         </div>
-        
+
         <button 
           className="btn-icon-subtle" 
           onClick={async () => { const success = await onRefresh(); if(success) showToast('Schema metadata refreshed'); }} 
           title="Refresh Schema Metadata"
         >
-          <RefreshCw size={15} />
+          <RefreshCw size={14} />
         </button>
-        
-        <div className="toolbar-divider" />
-        
+      </div>
+      
+      {/* Center: Compact Search Trigger */}
+      <div className="toolbar-center">
         <button 
-          className="btn-icon-subtle" 
-          onClick={onToggleLayout} 
-          title={`Switch layout direction to ${layoutDirection === 'RIGHT' ? 'Vertical (Top to Bottom)' : 'Horizontal (Left to Right)'}`}
+          className="toolbar-search-trigger" 
+          onClick={onOpenCommandPalette}
+          title="Search tables, procedures, keys (Ctrl+K / Cmd+K)"
         >
-          <LayoutTemplate size={15} style={{ transform: layoutDirection === 'DOWN' ? 'rotate(90deg)' : 'none', transition: 'transform 0.25s ease' }} />
-        </button>
-        
-        <button 
-          className="btn-icon-subtle" 
-          onClick={() => fitView({ padding: 0.2, duration: 600 })} 
-          title="Fit diagram to screen"
-        >
-          <Maximize size={15} />
+          <Search size={13} className="search-icon" />
+          <span>Search...</span>
+          <kbd>⌘K</kbd>
         </button>
       </div>
 
@@ -148,7 +130,7 @@ export default function Toolbar({
           onClick={onTogglePathFinder} 
           title="Trace foreign key relationship paths between tables"
         >
-          <Compass size={15} className="tool-icon-violet" /> 
+          <Compass size={14} className="tool-icon-violet" /> 
           <span>Path Finder</span>
         </button>
 
@@ -157,7 +139,7 @@ export default function Toolbar({
           onClick={onToggleAiChat} 
           title="Query schema with AI assistant"
         >
-          <Bot size={15} className="tool-icon-cyan" /> 
+          <Bot size={14} className="tool-icon-cyan" /> 
           <span>Ask AI</span>
         </button>
 
@@ -166,17 +148,16 @@ export default function Toolbar({
           onClick={onToggleCompare} 
           title="Compare schemas & stored procedures across databases or servers"
         >
-          <ArrowRightLeft size={15} className="tool-icon-amber" /> 
-          <span>Compare DBs</span>
+          <ArrowRightLeft size={14} className="tool-icon-amber" /> 
+          <span>Compare</span>
         </button>
 
         <button 
-          className="btn btn-primary btn-sm" 
+          className="btn-icon-subtle" 
           onClick={handleExport}
           title="Export current schema diagram as high-res PNG image"
         >
-          <ImageIcon size={14} /> 
-          <span>Export PNG</span>
+          <ImageIcon size={14} />
         </button>
 
         <div className="toolbar-divider" />
@@ -186,7 +167,7 @@ export default function Toolbar({
           onClick={onToggleTheme} 
           title={theme === 'dark' ? 'Switch to Light theme' : 'Switch to Dark theme'}
         >
-          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
         </button>
 
         <button 
@@ -195,7 +176,7 @@ export default function Toolbar({
           title="Disconnect from database" 
           style={{ color: 'var(--warning)' }}
         >
-          <Unplug size={15} />
+          <Unplug size={14} />
         </button>
 
         {currentUser && (
@@ -204,10 +185,9 @@ export default function Toolbar({
             title={`Signed in as ${currentUser.name || currentUser.username} (${currentUser.role || 'User'})`}
           >
             <div className="user-avatar-tiny">
-              <User size={12} />
+              <User size={11} />
             </div>
             <span className="user-pill-name">{currentUser.name || currentUser.username}</span>
-            <span className="user-pill-badge">{currentUser.role?.split(' ')[0] || 'User'}</span>
           </div>
         )}
 
@@ -217,7 +197,7 @@ export default function Toolbar({
           title="Sign out of DB Visualizer" 
           style={{ color: 'var(--danger)' }}
         >
-          <LogOut size={15} />
+          <LogOut size={14} />
         </button>
       </div>
     </header>

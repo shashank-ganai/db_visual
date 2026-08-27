@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Search, ChevronDown, ChevronRight, Layers, LayoutList, 
-  Database, Code, FileQuestion, ShieldCheck, X, Table2
+  Database, Code, FileQuestion, ShieldCheck, X, Table2,
+  PanelLeft
 } from 'lucide-react';
 import { EmptyState } from './LoadingStates';
 import SchemaHealth from './SchemaHealth';
@@ -14,7 +15,9 @@ export default function Sidebar({
   selectedColumn, 
   onSelectColumn,
   selectedSp,
-  onSelectSp
+  onSelectSp,
+  collapsed = false,
+  onToggleCollapse
 }) {
   const [activeTab, setActiveTab] = useState('tables'); // 'tables', 'sps', or 'health'
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,6 +102,52 @@ export default function Sidebar({
     );
   };
 
+  // --- Collapsed Rail View ---
+  if (collapsed) {
+    return (
+      <aside className="sidebar sidebar-collapsed">
+        <div className="sidebar-rail">
+          <button 
+            className={`sidebar-rail-btn ${activeTab === 'tables' ? 'active' : ''}`}
+            onClick={() => { handleTabChange('tables'); onToggleCollapse?.(); }}
+            title={`Tables (${totalTables})`}
+          >
+            <Database size={16} />
+            {totalTables > 0 && <span className="rail-count">{totalTables}</span>}
+          </button>
+          
+          <button 
+            className={`sidebar-rail-btn ${activeTab === 'sps' ? 'active' : ''}`}
+            onClick={() => { handleTabChange('sps'); onToggleCollapse?.(); }}
+            title={`Stored Procedures (${totalSps})`}
+          >
+            <Code size={16} />
+            {totalSps > 0 && <span className="rail-count">{totalSps}</span>}
+          </button>
+          
+          <button 
+            className={`sidebar-rail-btn ${activeTab === 'health' ? 'active' : ''}`}
+            onClick={() => { handleTabChange('health'); onToggleCollapse?.(); }}
+            title="Schema Health"
+          >
+            <ShieldCheck size={16} />
+          </button>
+
+          <div style={{ flex: 1 }} />
+
+          <button 
+            className="sidebar-rail-btn expand-btn"
+            onClick={onToggleCollapse}
+            title="Expand sidebar"
+          >
+            <PanelLeft size={16} />
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
+  // --- Full Sidebar View ---
   return (
     <aside className="sidebar">
       {/* Top Segmented Tabs */}
