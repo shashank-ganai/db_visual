@@ -603,8 +603,16 @@ app.post('/api/ai/analyze-sp', aiLimiter, async (req, res) => {
 });
 
 // --- Deployment: Serve Static Frontend ---
-const distPath = path.join(__dirname, '../client/dist');
+const possibleDistPaths = [
+  path.join(__dirname, '../client/dist'),
+  path.join(__dirname, './client/dist'),
+  path.join(__dirname, './dist'),
+  path.join(__dirname, './public')
+];
+const distPath = possibleDistPaths.find(p => fs.existsSync(path.join(p, 'index.html'))) || possibleDistPaths[0];
 const indexPath = path.join(distPath, 'index.html');
+
+console.log(`[Deployment] Serving static frontend from: ${distPath}`);
 
 app.use(express.static(distPath));
 

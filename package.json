@@ -5,6 +5,7 @@
   "scripts": {
     "start": "concurrently \"cd server && npm run dev\" \"cd client && npm run dev\"",
     "build": "cd client && npm run build",
+    "package": "npm run build && powershell -Command \"Remove-Item -Recurse -Force -ErrorAction SilentlyContinue publish; New-Item -ItemType Directory -Force -Path publish\\server,publish\\client\\dist | Out-Null; Copy-Item server\\index.js,server\\db.js,server\\package.json,server\\package-lock.json,server\\.env.example publish\\server\\; Copy-Item -Recurse client\\dist\\* publish\\client\\dist\\; Copy-Item start-server.bat,install-dependencies.bat,DEPLOYMENT_INSTRUCTIONS.txt publish\\ -ErrorAction SilentlyContinue; Write-Output '[SUCCESS] Package created in ./publish'\"",
     "prod:start": "cd server && npm start",
     "prod:build": "npm run install-all && npm run build",
     "install-all": "npm install && cd server && npm install && cd ../client && npm install"

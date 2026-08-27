@@ -13,6 +13,7 @@ node_modules/
 dist/
 client/dist/
 build/
+publish/
 
 # Logs & Debug outputs
 npm-debug.log*

@@ -1,0 +1,55 @@
+========================================================================
+           DB VISUALIZER - TURNKEY PRODUCTION DEPLOYMENT
+========================================================================
+
+This "publish" directory is completely self-contained and ready to copy &
+paste directly onto your Windows Server.
+
+------------------------------------------------------------------------
+FOLDER STRUCTURE:
+------------------------------------------------------------------------
+publish/
+  ├── client/dist/              --> Pre-built React Frontend + IIS web.config
+  ├── server/                   --> Express API backend (index.js, db.js, package.json)
+  ├── start-server.bat          --> 1-click batch file to run the server on port 3001
+  ├── install-dependencies.bat  --> 1-click batch file to install node_modules
+  └── DEPLOYMENT_INSTRUCTIONS.txt
+
+------------------------------------------------------------------------
+STEP-BY-STEP DEPLOYMENT ON WINDOWS SERVER WITH IIS:
+------------------------------------------------------------------------
+
+STEP 1: Copy this entire "publish" folder to your Windows Server.
+        Example location: C:\apps\db_visual  OR  D:\apps\db_visual
+
+STEP 2: Double-click "install-dependencies.bat" (or run "start-server.bat").
+        This will install the Node.js server dependencies.
+
+STEP 3: Start the Backend Server
+        Option A (Quick run): Double-click "start-server.bat".
+        Option B (Production Service via PM2):
+            npm install -g pm2
+            cd server
+            pm2 start index.js --name "db-visualizer"
+            pm2 save
+            pm2 startup
+
+STEP 4: Configure your IIS Website
+        1. Open IIS Manager.
+        2. Select your Website / Subdomain.
+        3. Click "Basic Settings...".
+        4. Set Physical Path to:
+           C:\apps\db_visual\client\dist
+        5. Verify that URL Rewrite and Application Request Routing (ARR)
+           are installed in IIS and ARR Proxy is enabled:
+           (IIS Manager -> Server Name -> ARR Cache -> Server Proxy Settings -> Enable Proxy).
+
+------------------------------------------------------------------------
+HOW THE API IS SECURED & HIDDEN:
+------------------------------------------------------------------------
+- Users only access your subdomain via IIS on Port 80 / 443.
+- IIS serves static files from client\dist and invisibly rewrites
+  "/api/*" requests internally to localhost (http://127.0.0.1:3001/api/*).
+- Port 3001 is NEVER opened to the public internet.
+
+========================================================================
